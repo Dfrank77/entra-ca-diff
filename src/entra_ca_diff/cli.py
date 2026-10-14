@@ -8,6 +8,7 @@ import sys
 
 from . import __version__
 from .loader import PolicyLoadError, load_policies
+from .html_report import render_html
 from .report import RENDERERS, to_markdown
 from .rules import compare_sets
 
@@ -27,6 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--format", choices=sorted(RENDERERS), default="text",
                         help="Output format (default: text)")
     parser.add_argument("--output", help="Write the report to this file instead of stdout")
+    parser.add_argument("--html", default="ca-diff-report.html", metavar="PATH",
+                        help="Where to write the HTML report (default: ca-diff-report.html)")
+    parser.add_argument("--no-html", action="store_true", help="Don't write the HTML report")
     parser.add_argument("--fail-on", choices=["low", "medium", "high", "never"], default="high",
                         help="Exit 1 if any finding is at or above this severity (default: high)")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -59,6 +63,11 @@ def main(argv: list[str] | None = None) -> int:
             fh.write(report if report.endswith("\n") else report + "\n")
     else:
         print(report)
+
+    if not args.no_html:
+        with open(args.html, "w", encoding="utf-8") as fh:
+            fh.write(render_html(findings, compared, args.baseline, args.proposed))
+        print(f"HTML report written to {args.html}", file=sys.stderr)
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:

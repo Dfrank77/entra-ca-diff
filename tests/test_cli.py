@@ -1,14 +1,24 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from entra_ca_diff.cli import main
+from entra_ca_diff.html_report import render_html
 from entra_ca_diff.loader import load_policies
+from entra_ca_diff.rules import Finding
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 
-def test_examples_flag_expected_findings(capsys, monkeypatch):
+@pytest.fixture(autouse=True)
+def _run_in_tmp(tmp_path, monkeypatch):
+    # The CLI writes ca-diff-report.html to the working directory by default.
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+
+def test_examples_flag_expected_findings(capsys):
     code = main([str(EXAMPLES / "baseline"), str(EXAMPLES / "proposed"), "--format", "json"])
     out = json.loads(capsys.readouterr().out)
     found = {(f["policy"].split(" - ")[0], f["rule"]) for f in out["findings"]}
@@ -84,3 +94,24 @@ def test_loader_skips_non_policy_json(tmp_path):
     result = load_policies(tmp_path)
     assert set(result.policies) == {"a"}
     assert len(result.skipped) == 1
+
+
+def test_html_report_written_by_default(tmp_path):
+    main([str(EXAMPLES / "baseline"), str(EXAMPLES / "proposed")])
+    html = (tmp_path / "ca-diff-report.html").read_text()
+    assert "CA004 - Block all access (testing)" in html
+    assert 'class="policy sev-high"' in html
+
+
+def test_html_custom_path_and_no_html(tmp_path):
+    main([str(EXAMPLES / "baseline"), str(EXAMPLES / "baseline"), "--html", str(tmp_path / "r.html")])
+    assert "No coverage or enforcement regressions" in (tmp_path / "r.html").read_text()
+    (tmp_path / "ca-diff-report.html").unlink(missing_ok=True)
+    main([str(EXAMPLES / "baseline"), str(EXAMPLES / "proposed"), "--no-html"])
+    assert not (tmp_path / "ca-diff-report.html").exists()
+
+
+def test_html_escapes_policy_names():
+    html = render_html([Finding("high", "r", "<script>alert(1)</script>", "m")], 1, "a", "b")
+    assert "<script>alert" not in html
+    assert "&lt;script&gt;" in html

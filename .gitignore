@@ -42,3 +42,6 @@ env/
 
 # Test and tool caches
 .pytest_cache/
+
+# Generated reports
+ca-diff-report.html

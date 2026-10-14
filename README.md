@@ -49,9 +49,35 @@ Options:
 |---|---|
 | `--format text\|markdown\|json` | Output format. Default is text. |
 | `--output FILE` | Write the report to a file instead of the terminal. |
+| `--html PATH` | Where to write the HTML report. Default is `ca-diff-report.html`. |
+| `--no-html` | Skip the HTML report. |
 | `--fail-on high\|medium\|low\|never` | Exit 1 if any finding is at or above this severity. Default is high. |
 
 Exit codes: 0 means nothing at or above `--fail-on`, 1 means findings, 2 means bad input.
+
+Every run also writes an HTML report (`ca-diff-report.html`) with one card per policy, sorted worst first.
+
+## Checking your own tenant
+
+You don't need CA in git to use this. Export your policies with [EntraExporter](https://github.com/microsoft/EntraExporter), export again later, and compare the two. That answers "what got weaker since last time."
+
+```powershell
+Install-Module EntraExporter -Scope CurrentUser
+Connect-EntraExporter -Type ConditionalAccess
+Export-Entra -Path ./ca-exports/before -Type ConditionalAccess
+```
+
+Later:
+
+```powershell
+Export-Entra -Path ./ca-exports/after -Type ConditionalAccess
+```
+
+Then:
+
+```
+entra-ca-diff ca-exports/before/Identity/Conditional/AccessPolicies ca-exports/after/Identity/Conditional/AccessPolicies
+```
 
 ## What it checks
 
