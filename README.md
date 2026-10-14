@@ -51,3 +51,4 @@ Instead of basic text matches, the core semantic evaluation engine validates inc
 * **Target Delivery Channels:** 
   * Local administrative utility execution script
   * Automated GitHub Actions pipeline workflow component targeting automated Pull Request reviews
+# entra-ca-diff
