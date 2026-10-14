@@ -1,0 +1,35 @@
+name: Entra CA Policy Gatekeeper
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'tests/test_samples/**.json' # Triggers automatically when a policy file changes
+
+jobs:
+  validate-policy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # Step 1: Securely pull down the repository branch code into the temporary pipeline container
+    - name: Checkout Repository Code
+      uses: actions/checkout@v4
+
+    # Step 2: Provision a clean Python 3.14 sandboxed runtime engine layer
+    - name: Set Up Python Runtime
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+        cache: 'pip'
+
+    # Step 3: Install our type-safety and validation models
+    - name: Install Project Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Step 4: Execute the Python engine comparing our modified test files
+    - name: Execute Semantic Policy Evaluation Check
+      run: |
+        python src/main.py --old tests/test_samples/old_mfa_policy.json --new tests/test_samples/new_mfa_policy.json
