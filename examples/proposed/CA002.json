@@ -1,0 +1,31 @@
+{
+  "id": "11111111-1111-1111-1111-000000000002",
+  "displayName": "CA002 - Block legacy authentication",
+  "state": "enabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [
+        "All"
+      ],
+      "excludeGroups": [
+        "00000000-0000-0000-0000-00000000b002",
+        "00000000-0000-0000-0000-00000000c001"
+      ]
+    },
+    "applications": {
+      "includeApplications": [
+        "All"
+      ]
+    },
+    "clientAppTypes": [
+      "exchangeActiveSync",
+      "other"
+    ]
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [
+      "block"
+    ]
+  }
+}

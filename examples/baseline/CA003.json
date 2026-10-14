@@ -1,0 +1,29 @@
+{
+  "id": "11111111-1111-1111-1111-000000000003",
+  "displayName": "CA003 - Require MFA for all users",
+  "state": "enabled",
+  "conditions": {
+    "users": {
+      "includeUsers": [
+        "All"
+      ],
+      "excludeGroups": [
+        "00000000-0000-0000-0000-00000000b002"
+      ]
+    },
+    "applications": {
+      "includeApplications": [
+        "All"
+      ]
+    },
+    "clientAppTypes": [
+      "all"
+    ]
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [
+      "mfa"
+    ]
+  }
+}

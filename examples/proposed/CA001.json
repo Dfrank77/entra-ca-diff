@@ -1,0 +1,30 @@
+{
+  "id": "11111111-1111-1111-1111-000000000001",
+  "displayName": "CA001 - Require MFA for Global Admins",
+  "state": "enabled",
+  "conditions": {
+    "users": {
+      "includeRoles": [
+        "62e90394-69f5-4237-9190-012177145e10"
+      ],
+      "excludeUsers": [
+        "00000000-0000-0000-0000-00000000b001"
+      ]
+    },
+    "applications": {
+      "includeApplications": [
+        "All"
+      ]
+    },
+    "clientAppTypes": [
+      "all"
+    ]
+  },
+  "grantControls": {
+    "operator": "OR",
+    "builtInControls": [
+      "mfa",
+      "compliantDevice"
+    ]
+  }
+}

@@ -1,54 +1,94 @@
-# entra-ca-diff 🛡️
+# entra-ca-diff
 
-An identity-aware semantic comparison engine designed to prevent catastrophic security regressions, accidental MFA bypasses, and configuration drift in **Microsoft Entra ID Conditional Access policies**.
+If you keep Conditional Access policies in git, a pull request that weakens one looks like any other JSON change. One new group in `excludeGroups` or `AND` flipped to `OR` is a single line in the diff, and it's easy to approve without seeing what it does.
 
-Built as a high-visibility DevSecOps guardrail that integrates directly into **GitOps deployment pipelines** or runs locally via a **Command Line Interface (CLI)**.
+entra-ca-diff compares two sets of CA policies and tells you which changes reduce coverage or enforcement. It works on the JSON Microsoft Graph returns, so it reads EntraExporter output or anything else that saves the raw policy objects.
 
----
+A finding doesn't mean the change is wrong. Plenty of exclusions are on purpose. It means someone should look before it merges.
 
-## 🚀 The Core Problem
+## Install
 
-When managing Entra ID infrastructure-as-code (using tools like `EntraExporter` or Terraform), changes to Conditional Access policies are reviewed as raw JSON text streams. Standard line-by-line `git diff` operations fail to capture semantic context:
-* A standard text diff highlights modified string properties or shifted arrays.
-* A single misplaced string (like adding `"All"` to an `excludeUsers` block) can silently disable global security rules, leaving the entire tenant vulnerable to takeover.
+Python 3.10 or newer. No other dependencies.
 
-`entra-ca-diff` resolves this exposure by enforcing a strict **Data Control Contract** against the native Microsoft Graph schema before modifications can be merged or deployed to production.
-
----
-
-## 🛠️ System Architecture
-
-The project is structured as a decoupled, testable Python package:
-
-```text
-entra-ca-diff/
-├── requirements.txt         # Package definitions (Pydantic v2.14+)
-├── README.md                # Engineering documentation
-├── src/
-│   ├── models.py            # Microsoft Graph schema abstraction layer
-│   └── engine.py            # Semantic evaluation logic and guardrails
-└── tests/
-    ├── test_samples/        # Dev vs. Production mock JSON policies
-    └── test_engine.py       # Validation suites
+```
+pip install git+https://github.com/Dfrank77/entra-ca-diff.git
 ```
 
----
+## Usage
 
-## 🔒 Security Guardrails Checked
+```
+entra-ca-diff <baseline> <proposed>
+```
 
-Instead of basic text matches, the core semantic evaluation engine validates incoming configurations against three primary, high-stakes security exposures:
+Both arguments can be a single JSON file or a folder. Folders are read recursively. A file can hold one policy, a list of policies, or a Graph list response (`{"value": [...]}`). Policies are matched by `id`, or by `displayName` if there's no id. JSON files that aren't CA policies (named locations, for example) are skipped.
 
-1. **Enforcement State Downshifting:** Triggers an alert if a policy transitions from `enabled` to `disabled` or shifts into `enabledForReportingButNotEnforced` (Report-Only) mode.
-2. **MFA Control Retractions:** Catches instances where robust authentication requirement controls (like multi-factor authentication or custom authentication strengths) are stripped from the policy configuration.
-3. **Universal Exclusions Leaks:** Intercepts critical validation faults where broad exclusion identifiers (such as the `"All"` users bypass string) leak into the policy footprint, accidentally exempting the entire enterprise.
+Try it on the included examples:
 
----
+```
+entra-ca-diff examples/baseline examples/proposed
+```
 
-## 🧑‍💻 Technical Stack & Compliance
+```
+4 findings (2 high, 2 medium) across 4 policies.
 
-* **Runtime Environment:** Python 3.14+ (leveraging native optimization paths)
-* **Data Integration Layer:** Pydantic v2.14+ (strict, type-safe API object mapping with automatic camelCase transformation support)
-* **Target Delivery Channels:** 
-  * Local administrative utility execution script
-  * Automated GitHub Actions pipeline workflow component targeting automated Pull Request reviews
-# entra-ca-diff
+[HIGH] CA003 - Require MFA for all users
+  state-weakened: Policy moved from enabled to report-only. It is no longer enforced.
+[HIGH] CA004 - Block all access (testing)
+  no-break-glass: Enabled block policy covers all users and all apps with no excluded users, groups or roles. This can lock everyone out of the tenant.
+[MEDIUM] CA001 - Require MFA for Global Admins
+  alternative-added: New OR alternative added. Users can now pass the policy with this instead of the existing requirement.
+    - control:compliantDevice
+[MEDIUM] CA002 - Block legacy authentication
+  exclusion-added: New excluded groups.
+    - 00000000-0000-0000-0000-00000000c001
+```
+
+Options:
+
+| Option | What it does |
+|---|---|
+| `--format text\|markdown\|json` | Output format. Default is text. |
+| `--output FILE` | Write the report to a file instead of the terminal. |
+| `--fail-on high\|medium\|low\|never` | Exit 1 if any finding is at or above this severity. Default is high. |
+
+Exit codes: 0 means nothing at or above `--fail-on`, 1 means findings, 2 means bad input.
+
+## What it checks
+
+| Rule | Severity | Triggers when |
+|---|---|---|
+| `state-weakened` | high / low | An enabled policy moves to report-only or disabled (high). Report-only to disabled is low. |
+| `policy-removed` | high / low | A policy is deleted. High if it was enabled. |
+| `control-removed` | high / medium / low | A grant control is removed. `block`, `mfa` and authentication strength are high. Terms of use and custom controls are low. |
+| `auth-strength-changed` | medium | The authentication strength is swapped for a different one. |
+| `operator-weakened` | high | Grant operator goes from `AND` to `OR` with more than one control. |
+| `alternative-added` | medium | A new control is added under `OR`, which gives users another way to pass. |
+| `exclusion-added` | medium | New excluded users, groups, roles, apps, service principals, locations, platforms or guests. |
+| `scope-narrowed` | high / medium | Something removed from an include list. Losing `All` from included users or apps is high. Also flags new risk level, location or platform conditions and narrower client app types, since those make the policy apply to fewer sign-ins. |
+| `no-break-glass` | high / medium | An enabled policy covers all users and all apps with no user, group or role exclusion. High for block policies, since that is how tenants get locked out. |
+
+Every check is about the policy getting weaker. Changes that make a policy stricter aren't reported.
+
+## Running it on pull requests
+
+`examples/workflows/ca-review.yml` is a GitHub Actions workflow for the repo where you keep your policies. On each pull request it checks out the base branch, runs entra-ca-diff against the PR's version, and writes a findings table to the job summary. It fails the check on high findings.
+
+It defaults to EntraExporter's folder layout (`Identity/Conditional/AccessPolicies`). Change `POLICY_PATH` if yours is different.
+
+## Limits
+
+- It compares JSON. It doesn't call Graph, so it can't tell you who is in a group or what an ID resolves to. Findings show raw IDs.
+- Session controls (sign-in frequency, persistent browser) aren't checked yet.
+- `no-break-glass` only looks for any user, group or role exclusion. It doesn't know whether that exclusion is actually your emergency access account.
+- Authentication strength is compared by ID. If you change what's inside a strength policy, this won't see it.
+
+## Development
+
+```
+pip install -e ".[dev]"
+pytest
+```
+
+## License
+
+MIT

@@ -40,5 +40,5 @@ env/
 .DS_Store
 .history/
 
-# Locally generated assessment dashboards
-ca_gatekeeper_report.html
+# Test and tool caches
+.pytest_cache/

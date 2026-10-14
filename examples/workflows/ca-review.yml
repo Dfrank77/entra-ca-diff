@@ -1,0 +1,43 @@
+# Copy this into .github/workflows/ in the repo where you keep exported
+# Conditional Access policies. On each pull request it compares the PR's
+# policies to the base branch and writes the findings to the job summary.
+# High severity findings fail the check.
+#
+# POLICY_PATH defaults to where EntraExporter writes CA policies
+# (Export-Entra -Type ConditionalAccess). Change it if yours live elsewhere.
+
+name: Conditional Access review
+
+on:
+  pull_request:
+    paths:
+      - "Identity/Conditional/AccessPolicies/**"
+
+permissions:
+  contents: read
+
+env:
+  POLICY_PATH: Identity/Conditional/AccessPolicies
+
+jobs:
+  ca-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install entra-ca-diff
+        run: pip install git+https://github.com/Dfrank77/entra-ca-diff.git
+
+      - name: Check out base branch policies
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "${{ github.event.pull_request.base.sha }}"
+          mkdir -p "$RUNNER_TEMP/base/$POLICY_PATH"
+
+      - name: Compare
+        run: entra-ca-diff "$RUNNER_TEMP/base/$POLICY_PATH" "$POLICY_PATH" --fail-on high
